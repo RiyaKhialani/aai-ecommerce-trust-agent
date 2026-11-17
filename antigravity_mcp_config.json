@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "ecommerce-trust-agent": {
+      "command": "python",
+      "args": [
+        "c:/Users/Jass/Documents/antigravity/adventurous-hopper/mcp_server.py",
+        "--stdio"
+      ],
+      "env": {
+        "PYTHONPATH": "c:/Users/Jass/Documents/antigravity/adventurous-hopper"
+      },
+      "description": "Autonomous E-commerce Product Listing & Review Trust Intelligence Agent (Guardrails, RAG, 10-Agent Pipeline, Optimization Advisor)"
+    }
+  }
+}
