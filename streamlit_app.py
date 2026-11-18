@@ -170,7 +170,7 @@ with st.sidebar:
         st.warning("⚠️ No Gemini Key in .env (Using Heuristic Fallback)")
 
     st.markdown("---")
-    run_btn = st.button("⚡ Execute Trust Audit", type="primary", use_container_width=True)
+    run_btn = st.button("⚡ Execute Trust Audit", type="primary", width='stretch')
 
     st.markdown("---")
     st.caption("Project Guides: Dr. Nupur Giri & Dr. Sujata Khedkar")
@@ -280,7 +280,7 @@ with tab1:
             "Operational Findings & Evidentiary Summary": a.summary
         })
     df_timeline = pd.DataFrame(timeline_data)
-    st.dataframe(df_timeline, use_container_width=True, hide_index=True)
+    st.dataframe(df_timeline, width='stretch', hide_index=True)
 
     if report.guardrail_status:
         st.caption(f"🛡️ Output Guardrail Status: {report.guardrail_status.get('action_taken', 'PASSED')} (All constraints verified)")
@@ -301,7 +301,7 @@ with tab2:
                 "Factual Explanation": e.explanation,
                 "Recommended Action": e.recommendation
             })
-        st.dataframe(pd.DataFrame(evidence_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(evidence_rows), width='stretch', hide_index=True)
     else:
         st.info("No compliance violations or fraudulent indicators found. Product conforms to marketplace standards.")
 
@@ -331,8 +331,8 @@ with tab3:
             title="Longitudinal Review Arrival Volume per Cohort Window"
         )
         fig.update_layout(template="plotly_dark", height=340)
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(df_cohort, use_container_width=True, hide_index=True)
+        st.plotly_chart(fig, width='stretch')
+        st.dataframe(df_cohort, width='stretch', hide_index=True)
     else:
         st.info("No longitudinal review corpus available for this listing.")
 
@@ -367,16 +367,16 @@ with tab5:
     qcol1, qcol2, qcol3, qcol4 = st.columns(4)
     quick_q = None
     with qcol1:
-        if st.button("❓ Why is this High Risk?", use_container_width=True):
+        if st.button("❓ Why is this High Risk?", width='stretch'):
             quick_q = "Why is this product listing classified as High Risk?"
     with qcol2:
-        if st.button("⚖️ What are FDA DSHEA rules?", use_container_width=True):
+        if st.button("⚖️ What are FDA DSHEA rules?", width='stretch'):
             quick_q = "What are the FDA DSHEA rules regarding dietary supplements and disease cures?"
     with qcol3:
-        if st.button("📈 Explain review velocity bursts", use_container_width=True):
+        if st.button("📈 Explain review velocity bursts", width='stretch'):
             quick_q = "Explain the velocity burst threshold and unverified purchase metrics."
     with qcol4:
-        if st.button("✉️ Draft inquiry for MECURE GLOBAL", use_container_width=True):
+        if st.button("✉️ Draft inquiry for MECURE GLOBAL", width='stretch'):
             quick_q = "Draft an official compliance inquiry letter for seller MECURE GLOBAL regarding batch code authenticity."
 
     # Clear chat button
@@ -456,7 +456,7 @@ with tab6:
     # Render User Infographic Image
     img_path = os.path.join(os.path.dirname(__file__), "static", "llm_optimization_techniques.jpg")
     if os.path.exists(img_path):
-        st.image(img_path, caption="Figure: 7 Canonical Techniques for LLM Speedup & Memory Optimization", use_container_width=True)
+        st.image(img_path, caption="Figure: 7 Canonical Techniques for LLM Speedup & Memory Optimization", width='stretch')
 
     st.markdown("---")
     st.subheader("Interactive LLM Acceleration & VRAM Simulator")
@@ -553,7 +553,7 @@ with tab7:
                 {"Check": c.name, "Passed": "✅ Yes" if c.passed else "❌ No", "Severity": c.severity, "Details": c.details}
                 for c in res.checks
             ]
-            st.dataframe(pd.DataFrame(g_checks), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(g_checks), width='stretch', hide_index=True)
 
     with g_col2:
         st.markdown("**Active Guardrail Rules:**")
@@ -569,7 +569,7 @@ with tab7:
     st.subheader("Persistent Guardrail Event Audit Log (from SQLite)")
     g_events = storage.get_guardrail_events(limit=20)
     if g_events:
-        st.dataframe(pd.DataFrame(g_events), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(g_events), width='stretch', hide_index=True)
     else:
         st.info("Zero guardrail violations logged in this session.")
 
@@ -594,7 +594,7 @@ with tab8:
                 "Engine": h["engine_mode"]
             })
         df_history = pd.DataFrame(h_rows)
-        st.dataframe(df_history, use_container_width=True, hide_index=True)
+        st.dataframe(df_history, width='stretch', hide_index=True)
 
         st.download_button(
             label="📥 Export Full Audit History (CSV)",
