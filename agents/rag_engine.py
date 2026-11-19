@@ -87,12 +87,22 @@ class TrustRAGEngine:
     def answer_reviewer_query(
         self,
         query: str,
-        llm_client: TrustAgentLLMClient,
         current_report: Optional[Dict[str, Any]] = None,
+        llm_client: Optional[TrustAgentLLMClient] = None,
     ) -> Dict[str, Any]:
         """Answers a Trust & Safety reviewer query via live LLM grounded in retrieved statutory chunks + current dossier."""
         retrieved_docs = self.retrieve(query, top_k=3)
         sources_cited = [f"{d['title']} ({d['authority']})" for d in retrieved_docs]
+
+        if llm_client is None:
+            score_str = f"{current_report.get('overall_trust_score')}/100" if current_report else ""
+            return {
+                "answer": f"Offline RAG summary: Listing scored {score_str}. Retrieved {len(retrieved_docs)} statutory chunk(s) relevant to query: '{query}'.",
+                "model_used": "heuristic_rag",
+                "latency_ms": 0.0,
+                "sources_cited": sources_cited,
+                "retrieved_chunks": retrieved_docs,
+            }
 
         listing_facts = ""
         if current_report:

@@ -78,15 +78,19 @@ Return strict JSON:
   "rationale": "1-2 sentence explanation"
 }}
 """
-            parsed, _, _ = llm_client.generate_json(prompt)
-            if "image_integrity_score" in parsed:
-                llm_score = max(0.10, min(1.0, float(parsed["image_integrity_score"])))
-                score = round(min(score, llm_score), 2)
-            for flg in parsed.get("flags") or []:
-                flg_str = str(flg).strip()
-                if flg_str and flg_str not in flags:
-                    flags.append(flg_str)
-            llm_rationale = str(parsed.get("rationale") or "")
+            try:
+                parsed, _, _ = llm_client.generate_json(prompt)
+                raw_flags = parsed if isinstance(parsed, list) else (parsed.get("flags") if isinstance(parsed, dict) else [])
+                if isinstance(parsed, dict) and "image_integrity_score" in parsed:
+                    llm_score = max(0.10, min(1.0, float(parsed["image_integrity_score"])))
+                    score = round(min(score, llm_score), 2)
+                for flg in raw_flags or []:
+                    flg_str = str(flg).strip()
+                    if flg_str and flg_str not in flags:
+                        flags.append(flg_str)
+                llm_rationale = str(parsed.get("rationale") or "") if isinstance(parsed, dict) else ""
+            except Exception:
+                pass
 
         integrity_score = max(0.10, min(1.0, round(score, 2)))
         meta = {

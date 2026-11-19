@@ -99,10 +99,11 @@ Return strict JSON:
 """
             try:
                 parsed, model_used, lat_ms = llm_client.generate_json(prompt)
-                if "compliance_score" in parsed:
+                raw_violations = parsed if isinstance(parsed, list) else (parsed.get("violations") if isinstance(parsed, dict) else [])
+                if isinstance(parsed, dict) and "compliance_score" in parsed:
                     llm_score = max(0.05, min(1.0, float(parsed["compliance_score"])))
                     score = round(min(score, llm_score), 2)
-                for item in parsed.get("violations") or []:
+                for item in raw_violations or []:
                     if isinstance(item, dict) and item.get("issue"):
                         if not any(v["issue"] == item["issue"] for v in violations):
                             violations.append(
@@ -116,9 +117,9 @@ Return strict JSON:
                 llm_meta = {
                     "model": model_used,
                     "llm_latency_ms": lat_ms,
-                    "rationale": parsed.get("rationale", ""),
+                    "rationale": parsed.get("rationale", "") if isinstance(parsed, dict) else "",
                 }
-            except LLMError as exc:
+            except Exception as exc:
                 llm_meta = {
                     "model": "heuristic_fallback",
                     "llm_latency_ms": 0.0,

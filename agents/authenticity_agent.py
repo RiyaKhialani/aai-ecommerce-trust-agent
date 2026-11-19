@@ -149,9 +149,10 @@ Return strict JSON:
 """
             try:
                 parsed, _, _ = llm_client.generate_json(prompt)
+                raw_ranked = parsed if isinstance(parsed, list) else (parsed.get("ranked_reviews") if isinstance(parsed, dict) else [])
                 llm_reviews_map = {
                     str(item.get("review_id")): item
-                    for item in (parsed.get("ranked_reviews") or [])
+                    for item in (raw_ranked or [])
                     if isinstance(item, dict) and item.get("review_id")
                 }
 
@@ -169,7 +170,7 @@ Return strict JSON:
                         ra["fake_score"] = round(0.35 * ra["heuristic_score"] + 0.65 * l_score, 2)
                         ra["reasoning"] = str(llm_item.get("reasoning") or ra["reasoning"]).strip()
                         ra["verdict"] = str(llm_item.get("verdict") or "Evaluated").strip()
-            except LLMError:
+            except Exception:
                 pass
 
         # 3. Final verdict assignment and ranking
@@ -288,6 +289,8 @@ Return strict JSON:
 """
             try:
                 parsed, model_used, lat_ms = llm_client.generate_json(prompt)
+                if not isinstance(parsed, dict):
+                    parsed = {}
                 if "authenticity_score" in parsed:
                     llm_score = max(0.05, min(1.0, float(parsed["authenticity_score"])))
                     score = round(min(score, llm_score), 2)
@@ -296,7 +299,7 @@ Return strict JSON:
                 meta["llm_model"] = model_used
                 meta["llm_latency_ms"] = lat_ms
                 meta["rationale"] = str(parsed.get("rationale") or "")
-            except LLMError as exc:
+            except Exception as exc:
                 meta["llm_error"] = str(exc)
                 meta["rationale"] = "Assessed via deterministic n-gram analysis, verified purchase ratios, and buyer counterfeit keyword scans."
 

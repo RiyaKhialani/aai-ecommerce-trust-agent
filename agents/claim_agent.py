@@ -90,7 +90,8 @@ Return strict JSON:
             try:
                 parsed, _, _ = llm_client.generate_json(prompt)
                 seen_texts = {c.claim_text.lower() for c in claims}
-                for item in parsed.get("claims") or []:
+                raw_claims = parsed if isinstance(parsed, list) else (parsed.get("claims") if isinstance(parsed, dict) else [])
+                for item in raw_claims or []:
                     if not isinstance(item, dict) or not item.get("claim_text"):
                         continue
                     ct = str(item["claim_text"]).strip()
@@ -108,7 +109,7 @@ Return strict JSON:
                             suggested_redline=item.get("suggested_redline") or None,
                         )
                     )
-            except LLMError:
+            except Exception:
                 pass
 
         return claims

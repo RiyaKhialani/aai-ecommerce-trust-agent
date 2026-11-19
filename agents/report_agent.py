@@ -63,11 +63,13 @@ Return strict JSON:
 """
             try:
                 parsed, _, _ = llm_client.generate_json(prompt)
+                if not isinstance(parsed, dict):
+                    parsed = {}
                 verdict = str(parsed.get("recommended_verdict") or f"{risk_tier}: Human Trust & Safety review recommended.")
                 exec_summary = str(parsed.get("executive_summary") or verdict)
                 merchant_notice = str(parsed.get("merchant_notice") or "No seller action required.")
                 return exec_summary, verdict, merchant_notice, redlines
-            except LLMError:
+            except Exception:
                 pass
 
         # Used only in offline unit tests where llm_client=None is explicitly passed

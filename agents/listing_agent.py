@@ -442,6 +442,9 @@ Return strict JSON matching this schema:
         except Exception:
             parsed = {}
 
+        if not isinstance(parsed, dict):
+            parsed = {}
+
         fallback_id = "LIVE-" + hashlib.md5((source_url or raw_text[:200]).encode("utf-8")).hexdigest()[:8].upper()
         listing_id = str(parsed.get("listing_id") or "").strip() or fallback_id
         price = float(parsed.get("price") or 0.0)
