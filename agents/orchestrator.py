@@ -388,6 +388,8 @@ class MultiAgentTrustOrchestrator:
             image_flags=image_flags,
             auto_suggested_reviewer_prompt=merchant_notice,
             reviews_sample=[r.model_dump() for r in listing.reviews],
+            top_fake_reviews=auth_meta.get("top_fake_reviews", []),
+            top_authentic_reviews=auth_meta.get("top_authentic_reviews", []),
             agent_timeline=timeline,
             verbose_audit_logs=audit_logger.get_logs(),
         )

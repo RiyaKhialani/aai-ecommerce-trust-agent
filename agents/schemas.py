@@ -113,3 +113,5 @@ class TrustReport(BaseModel):
     verbose_audit_logs: List[Dict[str, Any]] = Field(default_factory=list)
     guardrail_status: Optional[Dict[str, Any]] = None
     reviews_sample: List[Dict[str, Any]] = Field(default_factory=list)
+    top_fake_reviews: List[Dict[str, Any]] = Field(default_factory=list)
+    top_authentic_reviews: List[Dict[str, Any]] = Field(default_factory=list)

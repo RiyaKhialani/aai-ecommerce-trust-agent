@@ -91,9 +91,13 @@ class TestTrustAgentCore(unittest.TestCase):
         self.assertLess(comp_score, 0.5)
         self.assertGreaterEqual(len(comp_violations), 2)
 
-        auth_score, dup_phrases, _ = ReviewAuthenticityAgent().execute(listing, spike_info=spike_info, llm_client=None)
+        auth_score, dup_phrases, auth_meta = ReviewAuthenticityAgent().execute(listing, spike_info=spike_info, llm_client=None)
         self.assertLess(auth_score, 0.6)
         self.assertGreater(len(dup_phrases), 0)
+        self.assertIn("top_fake_reviews", auth_meta)
+        self.assertGreater(len(auth_meta["top_fake_reviews"]), 0)
+        self.assertIn("reasoning", auth_meta["top_fake_reviews"][0])
+        self.assertGreater(auth_meta["top_fake_reviews"][0]["fake_score"], 0.4)
 
         seller_score, seller_flags, _ = SellerBehaviorAgent().execute(listing)
         self.assertLess(seller_score, 0.8)

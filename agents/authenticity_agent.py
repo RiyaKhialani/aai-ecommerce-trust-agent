@@ -1,7 +1,8 @@
 """
 Agent 5: Review Authenticity Detection Agent
-Analyzes extracted customer reviews for opinion spam, repeated n-gram phrasing,
-unverified purchase ratios, direct counterfeit complaints, and live LLM authenticity reasoning.
+Analyzes customer reviews for opinion spam, repeated n-gram phrasing, unverified purchase
+ratios, direct counterfeit complaints, and generates forensic per-review ranking of the
+Top 5 Most Fake/Suspicious reviews and Top Authentic reviews with detailed AI reasoning.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import re
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from agents.llm_client import TrustAgentLLMClient
+from agents.llm_client import LLMError, TrustAgentLLMClient
 from agents.schemas import ProductListing, ReviewItem
 
 
@@ -37,6 +38,167 @@ class ReviewAuthenticityAgent:
             if count >= min_count
         ]
 
+    def _rank_reviews_forensically(
+        self,
+        reviews: List[ReviewItem],
+        repeated_phrases: List[Dict[str, Any]],
+        spike_info: Optional[Dict[str, Any]] = None,
+        llm_client: Optional[TrustAgentLLMClient] = None,
+        product_title: str = "",
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Ranks reviews from most fake to most authentic with itemized forensic reasoning."""
+        if not reviews:
+            return [], []
+
+        # 1. Deterministic heuristic baseline scoring per review
+        review_analyses: List[Dict[str, Any]] = []
+        dup_set = {dp["phrase"] for dp in repeated_phrases}
+        generic_buzzwords = [
+            "best ever", "miracle", "must buy", "life changing", "value of money",
+            "awesome product", "good product", "nice product", "superb product",
+            "very very worst", "waste of money", "100% recommend"
+        ]
+
+        for r in reviews:
+            h_score = 0.10
+            h_reasons = []
+            lower_text = f"{r.title} {r.text}".lower()
+
+            if not r.verified_purchase:
+                h_score += 0.30
+                h_reasons.append("Unverified buyer account (no confirmed platform order)")
+
+            matched_dups = [p for p in dup_set if p in lower_text]
+            if matched_dups:
+                h_score += 0.35
+                h_reasons.append(f"Contains syndicated review-farm phrasing: '{matched_dups[0]}'")
+
+            words = re.findall(r"\w+", r.text)
+            matched_buzz = [b for b in generic_buzzwords if b in lower_text]
+            if matched_buzz and len(words) < 22:
+                h_score += 0.20
+                h_reasons.append(f"Generic hyperbolic phrasing ('{matched_buzz[0]}') with minimal functional detail ({len(words)} words)")
+
+            if any(term in lower_text for term in ["fake", "scam", "counterfeit", "duplicate", "cheap copy", "not original", "blast", "explosive"]):
+                h_score += 0.25
+                h_reasons.append("Contains explicit buyer fraud/defect warnings or extreme alarmist vocabulary")
+
+            if r.rating == 5.0 and not r.verified_purchase:
+                h_score += 0.15
+                h_reasons.append("Unverified 5-star rating typical of promotional review seeding")
+
+            if spike_info and spike_info.get("spike_detected"):
+                sw = str(spike_info.get("time_window") or "")
+                if sw and sw in r.timestamp:
+                    h_score += 0.15
+                    h_reasons.append(f"Posted during identified velocity burst window ({sw})")
+
+            h_score = min(0.95, max(0.05, round(h_score, 2)))
+            review_analyses.append(
+                {
+                    "review_id": r.review_id,
+                    "reviewer_id": r.reviewer_id,
+                    "rating": r.rating,
+                    "title": r.title,
+                    "text": r.text,
+                    "timestamp": r.timestamp,
+                    "verified_purchase": r.verified_purchase,
+                    "helpful_votes": r.helpful_votes,
+                    "heuristic_score": h_score,
+                    "heuristic_reasons": h_reasons,
+                    "fake_score": h_score,
+                    "reasoning": "; ".join(h_reasons) or "Authentic verified purchase with specific usage feedback.",
+                    "verdict": "Likely Authentic",
+                }
+            )
+
+        # 2. Live LLM per-review forensic reasoning
+        if llm_client is not None:
+            sample_for_llm = "\n".join(
+                f"Review #{idx} [ID: {ra['review_id']}]:\n"
+                f"Reviewer: {ra['reviewer_id']} | Rating: {ra['rating']}★ | Date: {ra['timestamp']} | Verified: {ra['verified_purchase']}\n"
+                f"Title: {ra['title']}\n"
+                f"Body: {ra['text'][:280]}\n"
+                for idx, ra in enumerate(review_analyses[:15], 1)
+            )
+
+            prompt = f"""
+You are Agent 5 (Review Authenticity & Forensic Analysis Agent) in an E-Commerce Trust & Safety pipeline.
+Analyze each customer review below and evaluate its authenticity vs opinion-spam/incentivized manipulation.
+For EVERY review (by review_id), provide:
+1. "fake_score": float from 0.0 (100% authentic genuine buyer) to 1.0 (100% fake, bot, templated, or manipulated).
+2. "verdict": "High Suspicion (Likely Fake)", "Moderate Suspicion", or "Likely Authentic".
+3. "reasoning": 1-2 sentence detailed forensic rationale explaining why this review seems fake or authentic (mention specific signals: generic superlatives, lack of detail, verified purchase badge, extreme emotional tone, specific technical usage).
+
+Product: {product_title}
+
+Reviews to evaluate:
+{sample_for_llm}
+
+Return strict JSON:
+{{
+  "ranked_reviews": [
+    {{
+      "review_id": "rev-1",
+      "fake_score": 0.85,
+      "verdict": "High Suspicion (Likely Fake)",
+      "reasoning": "Unverified buyer with generic hyperbolic praise and no mention of specific features."
+    }}
+  ]
+}}
+"""
+            try:
+                parsed, _, _ = llm_client.generate_json(prompt)
+                llm_reviews_map = {
+                    str(item.get("review_id")): item
+                    for item in (parsed.get("ranked_reviews") or [])
+                    if isinstance(item, dict) and item.get("review_id")
+                }
+
+                for ra in review_analyses:
+                    rid = str(ra["review_id"])
+                    if rid in llm_reviews_map:
+                        llm_item = llm_reviews_map[rid]
+                        try:
+                            l_score = float(llm_item.get("fake_score", ra["heuristic_score"]))
+                            l_score = min(0.98, max(0.02, l_score))
+                        except (ValueError, TypeError):
+                            l_score = ra["heuristic_score"]
+
+                        # Blend 35% heuristic + 65% LLM forensic evaluation
+                        ra["fake_score"] = round(0.35 * ra["heuristic_score"] + 0.65 * l_score, 2)
+                        ra["reasoning"] = str(llm_item.get("reasoning") or ra["reasoning"]).strip()
+                        ra["verdict"] = str(llm_item.get("verdict") or "Evaluated").strip()
+            except LLMError:
+                pass
+
+        # 3. Final verdict assignment and ranking
+        for ra in review_analyses:
+            fs = ra["fake_score"]
+            if fs >= 0.60:
+                ra["verdict"] = "High Suspicion (Likely Fake)"
+                ra["risk_badge"] = "HIGH SUSPICION"
+            elif fs >= 0.38:
+                ra["verdict"] = "Moderate Suspicion"
+                ra["risk_badge"] = "MODERATE SUSPICION"
+            else:
+                ra["verdict"] = "Likely Authentic"
+                ra["risk_badge"] = "AUTHENTIC"
+            ra["fake_probability_pct"] = int(fs * 100)
+
+        # Sort descending by fake_score for top fake
+        ranked_fake = sorted(review_analyses, key=lambda x: x["fake_score"], reverse=True)
+        for idx, item in enumerate(ranked_fake, start=1):
+            item["rank"] = idx
+
+        top_5_fake = ranked_fake[:5]
+
+        # Sort ascending for most authentic
+        ranked_authentic = sorted(review_analyses, key=lambda x: x["fake_score"])
+        top_authentic = [r for r in ranked_authentic if r["fake_score"] < 0.50][:5]
+
+        return top_5_fake, top_authentic
+
     def execute(
         self,
         listing: ProductListing,
@@ -48,6 +210,8 @@ class ReviewAuthenticityAgent:
             return 0.65, [], {
                 "summary": "No customer reviews extracted from listing; assigned neutral baseline (0.65).",
                 "counterfeit_mentions": 0,
+                "top_fake_reviews": [],
+                "top_authentic_reviews": [],
             }
 
         counterfeit_reports = []
@@ -83,12 +247,23 @@ class ReviewAuthenticityAgent:
             score -= 0.25
         score = max(0.05, min(1.0, round(score, 2)))
 
+        # Perform forensic per-review ranking and explanation
+        top_fake_reviews, top_authentic_reviews = self._rank_reviews_forensically(
+            reviews=reviews,
+            repeated_phrases=repeated_phrases,
+            spike_info=spike_info,
+            llm_client=llm_client,
+            product_title=listing.title,
+        )
+
         meta: Dict[str, Any] = {
             "review_count": len(reviews),
             "avg_rating": round(avg_rating, 2),
             "unverified_ratio": round(unverified_ratio, 2),
             "counterfeit_mentions": len(counterfeit_reports),
             "rationale": "",
+            "top_fake_reviews": top_fake_reviews,
+            "top_authentic_reviews": top_authentic_reviews,
         }
 
         if llm_client is not None:
