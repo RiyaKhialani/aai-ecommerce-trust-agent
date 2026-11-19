@@ -321,27 +321,28 @@ class ListingIngestionAgent:
             except requests.RequestException:
                 pass
 
-        # 3. Fallback: DuckDuckGo Search Meta Lookup (recovers real product specs when Amazon returns 503)
+        # 3. Fallback: DuckDuckGo Search Meta Lookup (recovers real product specs when Amazon blocks datacenter IPs)
         if not raw_text and asin:
             try:
                 from ddgs import DDGS
                 with DDGS() as ddgs:
-                    query = f"site:amazon.in dp/{asin}"
-                    hits = list(ddgs.text(query, max_results=3))
+                    hits = list(ddgs.text(f'"{asin}" site:amazon.in', max_results=4))
                     if not hits:
-                        hits = list(ddgs.text(f"{asin} amazon product", max_results=3))
-                    if hits:
-                        best = hits[0]
-                        title = best.get("title", "").replace("Amazon.in:", "").replace("Buy ", "").strip()
-                        body_desc = "\n".join(h.get("body", "") for h in hits)
-                        if title and not self._is_blocked_or_error(title):
+                        hits = list(ddgs.text(f'"{asin}" Amazon', max_results=4))
+                    if not hits:
+                        hits = list(ddgs.text(f'"{asin}"', max_results=4))
+                    for h in hits:
+                        cand_title = h.get("title", "").replace("Amazon.in:", "").replace("Buy ", "").strip()
+                        cand_body = h.get("body", "").strip()
+                        if cand_title and not self._is_blocked_or_error(cand_title) and len(cand_body) > 30:
                             raw_text = (
-                                f"Product Title: {title}\n"
+                                f"Product Title: {cand_title}\n"
                                 f"ASIN: {asin}\n"
-                                f"Product Specifications & Overview: {body_desc}\n"
+                                f"Product Specifications & Overview: {cand_body}\n"
                                 f"Source URL: {canonical}"
                             )
                             method = "DuckDuckGo Search Metadata Recovery"
+                            break
             except Exception:
                 pass
 
