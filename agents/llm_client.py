@@ -102,7 +102,7 @@ class TrustAgentLLMClient:
         if model and model.strip():
             self.model = model.strip()
         elif self.provider == "gemini":
-            self.model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+            self.model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
         else:
             self.model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
@@ -121,13 +121,28 @@ class TrustAgentLLMClient:
     def parse_json(raw_text: str) -> Dict[str, Any]:
         cleaned = raw_text.strip()
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-        cleaned = re.sub(r"\s*```$", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
         try:
             return json.loads(cleaned)
         except json.JSONDecodeError:
             match = re.search(r"\{[\s\S]*\}", cleaned)
             if match:
-                return json.loads(match.group(0))
+                try:
+                    return json.loads(match.group(0))
+                except json.JSONDecodeError:
+                    pass
+            # Repair truncated / unterminated JSON
+            repaired = cleaned
+            if repaired.count('"') % 2 != 0:
+                repaired += '"'
+            open_braces = repaired.count("{") - repaired.count("}")
+            open_brackets = repaired.count("[") - repaired.count("]")
+            repaired += "]" * max(0, open_brackets)
+            repaired += "}" * max(0, open_braces)
+            try:
+                return json.loads(repaired)
+            except Exception:
+                pass
             raise LLMError(f"LLM returned non-JSON output: {raw_text[:280]}")
 
     def generate(
@@ -171,7 +186,7 @@ class TrustAgentLLMClient:
         t0 = time.perf_counter()
         gen_cfg: Dict[str, Any] = {
             "temperature": temperature,
-            "maxOutputTokens": 2048,
+            "maxOutputTokens": 8192,
         }
         if json_mode:
             gen_cfg["responseMimeType"] = "application/json"
@@ -184,7 +199,7 @@ class TrustAgentLLMClient:
             payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
 
         models_to_try = [self.model]
-        for candidate in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
+        for candidate in ["gemini-3.5-flash-lite", "gemini-3.5-flash"]:
             if candidate not in models_to_try:
                 models_to_try.append(candidate)
 

@@ -112,3 +112,4 @@ class TrustReport(BaseModel):
     agent_timeline: List[AgentExecutionStatus] = Field(default_factory=list)
     verbose_audit_logs: List[Dict[str, Any]] = Field(default_factory=list)
     guardrail_status: Optional[Dict[str, Any]] = None
+    reviews_sample: List[Dict[str, Any]] = Field(default_factory=list)

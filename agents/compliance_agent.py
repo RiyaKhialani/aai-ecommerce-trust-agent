@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from agents.llm_client import TrustAgentLLMClient
+from agents.llm_client import LLMError, TrustAgentLLMClient
 from agents.schemas import ProductListing
 
 
@@ -97,25 +97,32 @@ Return strict JSON:
   "rationale": "1-2 sentence audit rationale"
 }}
 """
-            parsed, model_used, lat_ms = llm_client.generate_json(prompt)
-            if "compliance_score" in parsed:
-                llm_score = max(0.05, min(1.0, float(parsed["compliance_score"])))
-                score = round(min(score, llm_score), 2)
-            for item in parsed.get("violations") or []:
-                if isinstance(item, dict) and item.get("issue"):
-                    if not any(v["issue"] == item["issue"] for v in violations):
-                        violations.append(
-                            {
-                                "category": str(item.get("category") or "LLM Policy Audit"),
-                                "term": str(item.get("term") or "Listing Text"),
-                                "issue": str(item["issue"]),
-                                "severity": str(item.get("severity") or "Medium"),
-                            }
-                        )
-            llm_meta = {
-                "model": model_used,
-                "llm_latency_ms": lat_ms,
-                "rationale": parsed.get("rationale", ""),
-            }
+            try:
+                parsed, model_used, lat_ms = llm_client.generate_json(prompt)
+                if "compliance_score" in parsed:
+                    llm_score = max(0.05, min(1.0, float(parsed["compliance_score"])))
+                    score = round(min(score, llm_score), 2)
+                for item in parsed.get("violations") or []:
+                    if isinstance(item, dict) and item.get("issue"):
+                        if not any(v["issue"] == item["issue"] for v in violations):
+                            violations.append(
+                                {
+                                    "category": str(item.get("category") or "LLM Policy Audit"),
+                                    "term": str(item.get("term") or "Listing Text"),
+                                    "issue": str(item["issue"]),
+                                    "severity": str(item.get("severity") or "Medium"),
+                                }
+                            )
+                llm_meta = {
+                    "model": model_used,
+                    "llm_latency_ms": lat_ms,
+                    "rationale": parsed.get("rationale", ""),
+                }
+            except LLMError as exc:
+                llm_meta = {
+                    "model": "heuristic_fallback",
+                    "llm_latency_ms": 0.0,
+                    "rationale": f"Deterministic statutory regex audit applied: {exc}",
+                }
 
         return score, violations, llm_meta

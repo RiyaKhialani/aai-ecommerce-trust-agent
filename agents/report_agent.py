@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Dict, List, Optional, Tuple
 
-from agents.llm_client import TrustAgentLLMClient
+from agents.llm_client import LLMError, TrustAgentLLMClient
 from agents.schemas import EvidenceItem, ExtractedClaim, ProductListing
 
 
@@ -61,11 +61,14 @@ Return strict JSON:
   "merchant_notice": "Concise, formal email notice to send to the seller requesting specific documentation (or 'No seller action required.' if LOW RISK)."
 }}
 """
-            parsed, _, _ = llm_client.generate_json(prompt)
-            verdict = str(parsed.get("recommended_verdict") or f"{risk_tier}: Human Trust & Safety review recommended.")
-            exec_summary = str(parsed.get("executive_summary") or verdict)
-            merchant_notice = str(parsed.get("merchant_notice") or "No seller action required.")
-            return exec_summary, verdict, merchant_notice, redlines
+            try:
+                parsed, _, _ = llm_client.generate_json(prompt)
+                verdict = str(parsed.get("recommended_verdict") or f"{risk_tier}: Human Trust & Safety review recommended.")
+                exec_summary = str(parsed.get("executive_summary") or verdict)
+                merchant_notice = str(parsed.get("merchant_notice") or "No seller action required.")
+                return exec_summary, verdict, merchant_notice, redlines
+            except LLMError:
+                pass
 
         # Used only in offline unit tests where llm_client=None is explicitly passed
         verdict = (

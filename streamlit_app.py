@@ -97,7 +97,7 @@ with st.sidebar:
     provider_label = st.selectbox("LLM Provider", ["Google Gemini", "Groq"], index=0)
     provider_key = "gemini" if "Gemini" in provider_label else "groq"
     model_options = (
-        ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"]
+        ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"]
         if provider_key == "gemini"
         else ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     )
@@ -361,6 +361,22 @@ with tab_cohorts:
         if report.duplicate_phrases_found:
             st.markdown("##### Repeated 4-Gram Phrasing Clusters Detected")
             st.dataframe(pd.DataFrame(report.duplicate_phrases_found), width='stretch', hide_index=True)
+
+        if report.reviews_sample:
+            st.divider()
+            st.markdown(f"##### Extracted Customer Reviews ({len(report.reviews_sample)} reviews analyzed)")
+            rev_display = [
+                {
+                    "Rating": f"{r.get('rating', 0.0):.1f} ★",
+                    "Verified": "✅ Verified" if r.get("verified_purchase") else "⚠️ Unverified",
+                    "Date": r.get("timestamp", "Undated"),
+                    "Reviewer": r.get("reviewer_id", "Customer"),
+                    "Title": r.get("title", ""),
+                    "Review Excerpt": r.get("text", "")[:180] + ("..." if len(r.get("text", "")) > 180 else ""),
+                }
+                for r in report.reviews_sample
+            ]
+            st.dataframe(pd.DataFrame(rev_display), width='stretch', hide_index=True)
 
 # =========================================================================
 # TAB 4: STATUTORY RAG CHAT ASSISTANT (LIVE LLM)

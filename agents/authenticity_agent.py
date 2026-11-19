@@ -111,14 +111,18 @@ Return strict JSON:
   "rationale": "Concise 2-sentence explanation of review authenticity"
 }}
 """
-            parsed, model_used, lat_ms = llm_client.generate_json(prompt)
-            if "authenticity_score" in parsed:
-                llm_score = max(0.05, min(1.0, float(parsed["authenticity_score"])))
-                score = round(min(score, llm_score), 2)
-            if parsed.get("counterfeit_alert_detected"):
-                score = min(score, 0.25)
-            meta["llm_model"] = model_used
-            meta["llm_latency_ms"] = lat_ms
-            meta["rationale"] = str(parsed.get("rationale") or "")
+            try:
+                parsed, model_used, lat_ms = llm_client.generate_json(prompt)
+                if "authenticity_score" in parsed:
+                    llm_score = max(0.05, min(1.0, float(parsed["authenticity_score"])))
+                    score = round(min(score, llm_score), 2)
+                if parsed.get("counterfeit_alert_detected"):
+                    score = min(score, 0.25)
+                meta["llm_model"] = model_used
+                meta["llm_latency_ms"] = lat_ms
+                meta["rationale"] = str(parsed.get("rationale") or "")
+            except LLMError as exc:
+                meta["llm_error"] = str(exc)
+                meta["rationale"] = "Assessed via deterministic n-gram analysis, verified purchase ratios, and buyer counterfeit keyword scans."
 
         return score, repeated_phrases, meta

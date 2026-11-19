@@ -14,6 +14,7 @@ import unittest
 from agents.authenticity_agent import ReviewAuthenticityAgent
 from agents.compliance_agent import ListingComplianceClassifier
 from agents.guardrails import TrustGuardrailsEngine
+from agents.listing_agent import ListingIngestionAgent
 from agents.llm_client import LLMError, TrustAgentLLMClient
 from agents.rag_engine import TrustRAGEngine
 from agents.review_agent import ReviewSegmentationAgent
@@ -128,6 +129,45 @@ class TestTrustAgentCore(unittest.TestCase):
             import gc, shutil
             gc.collect()
             shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def test_review_extraction_and_date_normalization(self):
+        agent = ListingIngestionAgent()
+        # 1. Date normalization tests
+        self.assertEqual(agent.normalize_review_date("Reviewed in India on 21 May 2025"), "2025-05-21")
+        self.assertEqual(agent.normalize_review_date("19 July 2024"), "2024-07-19")
+        self.assertEqual(agent.normalize_review_date("October 21, 2026"), "2026-10-21")
+        self.assertEqual(agent.normalize_review_date("2026-03-02"), "2026-03-02")
+        self.assertEqual(agent.normalize_review_date("Invalid date text"), "Undated")
+
+        # 2. Heuristic review extraction test from Jina markdown
+        sample_markdown = """
+### Top reviews from India
+
+* Sanndeep Prajapati _5 out of 5 stars_ ##### [Value of money]
+Reviewed in India on 21 May 2025 [Verified Purchase]
+These earbuds are amazing. The sound quality is crystal clear and bass is strong.
+6 people found this helpful
+
+* Rahul yadav _1 out of 5 stars_ ##### [Very Bad product]
+Reviewed in India on 21 October 2026 [Verified Purchase]
+Charging is not working properly and customer service refused replacement.
+"""
+        reviews = agent.extract_reviews_heuristic(sample_markdown)
+        self.assertEqual(len(reviews), 2)
+        self.assertEqual(reviews[0].reviewer_id, "Sanndeep Prajapati")
+        self.assertEqual(reviews[0].rating, 5.0)
+        self.assertEqual(reviews[0].title, "Value of money")
+        self.assertEqual(reviews[0].timestamp, "2025-05-21")
+        self.assertTrue(reviews[0].verified_purchase)
+        self.assertEqual(reviews[0].helpful_votes, 6)
+        self.assertIn("These earbuds are amazing", reviews[0].text)
+
+        self.assertEqual(reviews[1].reviewer_id, "Rahul yadav")
+        self.assertEqual(reviews[1].rating, 1.0)
+        self.assertEqual(reviews[1].title, "Very Bad product")
+        self.assertEqual(reviews[1].timestamp, "2026-10-21")
+        self.assertTrue(reviews[1].verified_purchase)
+        self.assertIn("Charging is not working properly", reviews[1].text)
 
 
 if __name__ == "__main__":

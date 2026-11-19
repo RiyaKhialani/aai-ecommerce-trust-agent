@@ -70,7 +70,11 @@ class MultiAgentTrustOrchestrator:
 
         # --- AGENT 1: Listing Ingestion ---
         t0 = time.perf_counter()
-        if input_mode == "live_url":
+        is_url = (
+            str(input_mode).strip().lower() in ("live_url", "live url", "url")
+            or target.strip().startswith(("http://", "https://"))
+        )
+        if is_url:
             listing: ProductListing = self.listing_agent.execute_from_url(target, llm_client=llm_client)
             source_label = "Live Marketplace URL"
         else:
@@ -383,6 +387,7 @@ class MultiAgentTrustOrchestrator:
             seller_flags=seller_flags,
             image_flags=image_flags,
             auto_suggested_reviewer_prompt=merchant_notice,
+            reviews_sample=[r.model_dump() for r in listing.reviews],
             agent_timeline=timeline,
             verbose_audit_logs=audit_logger.get_logs(),
         )

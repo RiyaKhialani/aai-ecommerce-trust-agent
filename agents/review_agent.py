@@ -30,7 +30,14 @@ class ReviewSegmentationAgent:
         cohort_groups = defaultdict(list)
         for r in reviews:
             ts = r.timestamp.strip()
-            window_key = ts[:10] if len(ts) >= 10 and ts[0].isdigit() else "Undated"
+            if len(ts) >= 10 and ts[:4].isdigit():
+                window_key = ts[:10]  # YYYY-MM-DD daily window
+            elif len(ts) >= 7 and ts[:4].isdigit():
+                window_key = ts[:7]   # YYYY-MM monthly window
+            elif len(ts) >= 10 and ts[0].isdigit():
+                window_key = ts[:10]
+            else:
+                window_key = "Undated"
             cohort_groups[window_key].append(r)
 
         sorted_keys = sorted(cohort_groups.keys())

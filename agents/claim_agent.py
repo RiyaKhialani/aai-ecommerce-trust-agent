@@ -10,7 +10,7 @@ import json
 import re
 from typing import List, Optional
 
-from agents.llm_client import TrustAgentLLMClient
+from agents.llm_client import LLMError, TrustAgentLLMClient
 from agents.schemas import ExtractedClaim, ProductListing
 
 
@@ -87,25 +87,28 @@ Return strict JSON:
   ]
 }}
 """
-            parsed, _, _ = llm_client.generate_json(prompt)
-            seen_texts = {c.claim_text.lower() for c in claims}
-            for item in parsed.get("claims") or []:
-                if not isinstance(item, dict) or not item.get("claim_text"):
-                    continue
-                ct = str(item["claim_text"]).strip()
-                if ct.lower() in seen_texts:
-                    continue
-                seen_texts.add(ct.lower())
-                claims.append(
-                    ExtractedClaim(
-                        claim_text=ct,
-                        claim_category=str(item.get("claim_category") or "Technical Spec"),
-                        is_verified=bool(item.get("is_verified", False)),
-                        verification_source=str(item.get("verification_source") or "Seller-stated"),
-                        risk_level=str(item.get("risk_level") or "Low"),
-                        policy_issue=item.get("policy_issue") or None,
-                        suggested_redline=item.get("suggested_redline") or None,
+            try:
+                parsed, _, _ = llm_client.generate_json(prompt)
+                seen_texts = {c.claim_text.lower() for c in claims}
+                for item in parsed.get("claims") or []:
+                    if not isinstance(item, dict) or not item.get("claim_text"):
+                        continue
+                    ct = str(item["claim_text"]).strip()
+                    if ct.lower() in seen_texts:
+                        continue
+                    seen_texts.add(ct.lower())
+                    claims.append(
+                        ExtractedClaim(
+                            claim_text=ct,
+                            claim_category=str(item.get("claim_category") or "Technical Spec"),
+                            is_verified=bool(item.get("is_verified", False)),
+                            verification_source=str(item.get("verification_source") or "Seller-stated"),
+                            risk_level=str(item.get("risk_level") or "Low"),
+                            policy_issue=item.get("policy_issue") or None,
+                            suggested_redline=item.get("suggested_redline") or None,
+                        )
                     )
-                )
+            except LLMError:
+                pass
 
         return claims
