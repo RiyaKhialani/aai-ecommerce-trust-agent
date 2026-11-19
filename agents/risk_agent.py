@@ -1,19 +1,21 @@
 """
 Agent 8: Risk Scoring & Aggregation Agent
-Combines signals from all detection agents into a single weighted trust score (0 to 100).
-Categorizes listing into Low, Medium, and High risk tiers and compiles itemized evidence records.
+Aggregates the four specialist agent scores using a transparent weighted formula:
+    Trust Score = 100 * (0.25 * Compliance + 0.35 * Authenticity + 0.25 * Seller + 0.15 * Image)
+Assigns risk tiers (LOW / MEDIUM / HIGH RISK) and compiles itemized evidence records.
 """
 
-from typing import Dict, Any, List, Tuple
-from agents.schemas import ProductListing, EvidenceItem, ExtractedClaim
+from __future__ import annotations
+
+from typing import Any, Dict, List, Tuple
+
+from agents.schemas import EvidenceItem, ExtractedClaim, ProductListing
 
 
 class RiskScoringAggregationAgent:
-    def __init__(self):
+    def __init__(self) -> None:
         self.agent_id = 8
         self.name = "Risk Scoring & Aggregation Agent"
-
-        # Signal weights (total = 1.0)
         self.weight_compliance = 0.25
         self.weight_authenticity = 0.35
         self.weight_seller = 0.25
@@ -31,20 +33,16 @@ class RiskScoringAggregationAgent:
         seller_flags: List[str],
         image_score: float,
         image_flags: List[str],
-        extracted_claims: List[ExtractedClaim]
+        extracted_claims: List[ExtractedClaim],
     ) -> Tuple[float, str, List[EvidenceItem]]:
-
-        # Weighted calculation
         raw_weighted = (
-            (compliance_score * self.weight_compliance) +
-            (authenticity_score * self.weight_authenticity) +
-            (seller_score * self.weight_seller) +
-            (image_score * self.weight_image)
+            compliance_score * self.weight_compliance
+            + authenticity_score * self.weight_authenticity
+            + seller_score * self.weight_seller
+            + image_score * self.weight_image
         )
+        overall_trust_score = round(raw_weighted * 100.0, 1)
 
-        overall_trust_score = round(raw_weighted * 100, 1)
-
-        # Risk tier assignment
         if overall_trust_score >= 75.0:
             risk_tier = "LOW RISK"
         elif overall_trust_score >= 50.0:
@@ -52,113 +50,91 @@ class RiskScoringAggregationAgent:
         else:
             risk_tier = "HIGH RISK"
 
-        # Itemized evidence compilation
         evidence: List[EvidenceItem] = []
 
-        # 0. Direct Customer Counterfeit / Fake Reports
-        for r in listing.reviews:
-            full_r = f"{r.title} {r.text}".lower()
-            if any(term in full_r for term in ["fake product", "scam product", "counterfeit", "duplicate", "not safe to use"]):
-                evidence.append(
-                    EvidenceItem(
-                        module="Direct Buyer Counterfeit Alert",
-                        item_detected=f"Verified Buyer Report: \"{r.title}\"",
-                        issue="Customers explicitly report receiving a fake/counterfeit and unsafe product",
-                        risk_level="Critical",
-                        explanation=f"Customer review confirms: \"{r.text[:160]}\"",
-                        recommendation="Immediate marketplace catalog suspension and mandatory proof of authorization audit."
-                    )
+        # 1. Compliance Violations
+        for v in compliance_violations:
+            evidence.append(
+                EvidenceItem(
+                    module="Agent 3: Listing Compliance",
+                    item_detected=str(v.get("term") or v.get("category") or "Policy Claim"),
+                    issue=str(v.get("issue") or "Policy violation flagged"),
+                    risk_level=str(v.get("severity") or "Medium"),
+                    explanation=f"Flagged under {v.get('category', 'Compliance Policy')}.",
+                    recommendation="Require merchant documentation or enforce claim redline before publishing.",
                 )
-                break
+            )
 
-        # 1. Review Velocity Spike evidence
+        # 2. Review Velocity Burst
         if spike_info.get("spike_detected"):
             evidence.append(
                 EvidenceItem(
-                    module="Review Velocity Monitor",
-                    item_detected=f"Review velocity spike: {spike_info.get('spike_count')} reviews in 48h ({spike_info.get('time_window')})",
-                    issue="Unnatural burst volume exceeding baseline sales velocity by >3x",
+                    module="Agent 2: Review Cohorts",
+                    item_detected=f"Velocity Spike ({spike_info.get('time_window', 'Recent')})",
+                    issue=str(spike_info.get("warning") or "Abnormal review burst detected"),
                     risk_level="High",
-                    explanation="Burst pattern + phrase duplication matches known incentivized-review manipulation signature.",
-                    recommendation="Flag for manual seller audit; withhold 'Amazon's Choice' or verified badge pending audit."
+                    explanation=(
+                        f"{spike_info.get('spike_count')} reviews vs {spike_info.get('baseline_average')} baseline "
+                        f"({spike_info.get('multiplier')}x multiplier)."
+                    ),
+                    recommendation="Hold promotional badges and audit reviewer cohort authenticity.",
                 )
             )
 
-        # 2. Phrasing duplication evidence
+        # 3. Duplicate Review Phrases
         if duplicate_phrases:
-            phrases_str = ", ".join([f'"{p["phrase"]}" ({p["count"]} times)' for p in duplicate_phrases[:3]])
+            top_phrases = ", ".join(f"'{p['phrase']}' ({p['count']}x)" for p in duplicate_phrases[:3])
             evidence.append(
                 EvidenceItem(
-                    module="Review Authenticity Detector",
-                    item_detected=f"Duplicate review templates detected: {phrases_str}",
-                    issue="Multiple reviews across distinct accounts share identical sentence structure",
-                    risk_level="High",
-                    explanation="High clustering of repeated praise indicates automated bot generation or paid reviewer rings.",
-                    recommendation="Quarantine reviews matching template hash and recalculate organic star rating."
+                    module="Agent 5: Review Authenticity",
+                    item_detected="Repeated 4-Gram Phrase Clusters",
+                    issue=f"Templated phrasing across multiple reviews: {top_phrases}",
+                    risk_level="High" if len(duplicate_phrases) >= 3 else "Medium",
+                    explanation="Exact multi-word sequences repeated across distinct reviews indicate potential review manipulation.",
+                    recommendation="Flag review cluster for Trust & Safety anti-spam investigation.",
                 )
             )
 
-        # 3. Compliance violations evidence
-        for v in compliance_violations:
-            if isinstance(v, dict):
-                v_term = v.get("term", "Policy breach")
-                v_issue = v.get("issue", "Policy violation")
-                v_sev = v.get("severity", "Medium")
-                v_cat = v.get("category", "Restricted Claims")
-            else:
-                v_term = str(v)
-                v_issue = str(v)
-                v_sev = "High" if any(w in str(v).lower() for w in ["cure", "fda", "prohibited", "illegal"]) else "Medium"
-                v_cat = "Statutory Compliance"
-
+        # 4. Seller Behavior Flags
+        for sf in seller_flags:
+            is_high = any(k in sf.lower() for k in ["inflation", "dumping", "unauthorized"])
             evidence.append(
                 EvidenceItem(
-                    module="Policy Compliance Classifier",
-                    item_detected=f"Restricted term: \"{v_term}\"",
-                    issue=v_issue,
-                    risk_level=v_sev,
-                    explanation=f"Product copy breaches marketplace catalog policy in category '{v_cat}'.",
-                    recommendation="Apply catalog content warning and require seller to submit approved label documentation."
+                    module="Agent 6: Seller Behavior",
+                    item_detected=f"Merchant: {listing.seller_name}",
+                    issue=sf,
+                    risk_level="High" if is_high else "Medium",
+                    explanation="Derived from merchant pricing, tenure, and storefront metadata.",
+                    recommendation="Verify authorized distributor invoices and seller KYC history.",
                 )
             )
 
-        # 4. Seller behavior evidence
-        for flag in seller_flags:
+        # 5. Image & Packaging Signals
+        for imf in image_flags:
+            is_high = "defect" in imf.lower() or "counterfeit" in imf.lower()
             evidence.append(
                 EvidenceItem(
-                    module="Seller Behavioral Intelligence",
-                    item_detected="Seller anomaly detected",
-                    issue=flag,
-                    risk_level="High" if "Inflation" in flag or "Crash" in flag else "Medium",
-                    explanation="Seller velocity profile is inconsistent with organic merchant growth curves.",
-                    recommendation="Place seller payout on 14-day hold pending identity and inventory verification."
+                    module="Agent 7: Image & Packaging Signal",
+                    item_detected="Listing Visual / Packaging Audit",
+                    issue=imf,
+                    risk_level="High" if is_high else "Medium",
+                    explanation="Derived from listing media availability and buyer packaging reports.",
+                    recommendation="Request high-resolution batch-code and packaging certification photos.",
                 )
             )
 
-        # 5. Image & counterfeit signals
-        for iflag in image_flags:
-            evidence.append(
-                EvidenceItem(
-                    module="Counterfeit & Image Inspector",
-                    item_detected="Image anomaly",
-                    issue=iflag,
-                    risk_level="Medium",
-                    explanation="Asset fingerprints indicate non-exclusive or synthetic media sourcing.",
-                    recommendation="Request original product photography with serial number stamp."
+        # 6. High-Risk Unverified Claims
+        for cl in extracted_claims:
+            if not cl.is_verified and cl.risk_level in ("High", "Medium") and cl.policy_issue:
+                evidence.append(
+                    EvidenceItem(
+                        module="Agent 4: Claim Extraction",
+                        item_detected=cl.claim_text,
+                        issue=cl.policy_issue,
+                        risk_level=cl.risk_level,
+                        explanation=f"Verification status: {cl.verification_source}.",
+                        recommendation=f"Redline to: {cl.suggested_redline}" if cl.suggested_redline else "Request third-party certificate.",
+                    )
                 )
-            )
-
-        # If clean
-        if not evidence:
-            evidence.append(
-                EvidenceItem(
-                    module="Integrity Verification",
-                    item_detected="Normal baseline operation",
-                    issue="No significant policy, velocity, or seller anomalies detected",
-                    risk_level="Low",
-                    explanation="Listing patterns, review velocity curve, and seller account longevity adhere to marketplace trust guidelines.",
-                    recommendation="Maintain standard catalog placement and badge eligibility."
-                )
-            )
 
         return overall_trust_score, risk_tier, evidence

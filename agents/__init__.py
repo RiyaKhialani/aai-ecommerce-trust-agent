@@ -1,18 +1,20 @@
 """
-Autonomous E-commerce Product Listing & Review Trust Intelligence Agent
-Package containing the 10-Agent Architecture, Schemas, and Benchmark Datasets.
+Autonomous E-commerce Product Listing & Review Trust Agent (PS-11).
+Clean 10-Agent Enterprise Triage Package for AAI & EA (NCMPEL64), VESIT.
 """
 
-from agents.schemas import ProductListing, TrustReport, EvidenceItem, CohortMetrics, ExtractedClaim
+from agents.llm_client import TrustAgentLLMClient, LLMError, audit_logger
 from agents.orchestrator import MultiAgentTrustOrchestrator
-from agents.datasets import get_benchmark_listings
+from agents.guardrails import TrustGuardrailsEngine
+from agents.storage import TrustStorage
+from agents.rag_engine import TrustRAGEngine
 
 __all__ = [
-    "ProductListing",
-    "TrustReport",
-    "EvidenceItem",
-    "CohortMetrics",
-    "ExtractedClaim",
+    "TrustAgentLLMClient",
+    "LLMError",
+    "audit_logger",
     "MultiAgentTrustOrchestrator",
-    "get_benchmark_listings",
+    "TrustGuardrailsEngine",
+    "TrustStorage",
+    "TrustRAGEngine",
 ]

@@ -1,5 +1,10 @@
+"""
+Data Contracts (Pydantic Schemas) for the 10-Agent E-commerce Trust Intelligence Pipeline.
+"""
+
 from __future__ import annotations
-from typing import List, Dict, Optional, Any
+
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -27,12 +32,12 @@ class ProductListing(BaseModel):
     seller_name: str
     seller_country: Optional[str] = None
     origin_country: Optional[str] = None
-    seller_account_age_days: int
-    seller_rating: float = 4.5
+    seller_account_age_days: Optional[int] = None
+    seller_rating: float = 0.0
     price_history: List[Dict[str, Any]] = Field(default_factory=list)
     image_urls: List[str] = Field(default_factory=list)
     listing_date: str = ""
-    stock_status: str = "In Stock"
+    stock_status: str = "Unknown"
     specs: Dict[str, str] = Field(default_factory=dict)
     url: Optional[str] = None
     reviews: List[ReviewItem] = Field(default_factory=list)
@@ -49,10 +54,10 @@ class CohortMetrics(BaseModel):
 
 class ExtractedClaim(BaseModel):
     claim_text: str
-    claim_category: str  # e.g., "Certification", "Technical Spec", "Medical/Health", "Warranty"
+    claim_category: str
     is_verified: bool = False
     verification_source: str = "Seller-stated"
-    risk_level: str = "Low"  # "Low", "Medium", "High"
+    risk_level: str = "Low"
     policy_issue: Optional[str] = None
     suggested_redline: Optional[str] = None
 
@@ -61,7 +66,7 @@ class EvidenceItem(BaseModel):
     module: str
     item_detected: str
     issue: str
-    risk_level: str  # "Low", "Medium", "High", "Critical"
+    risk_level: str  # Low, Medium, High, Critical
     explanation: str
     recommendation: str
 
@@ -69,26 +74,29 @@ class EvidenceItem(BaseModel):
 class AgentExecutionStatus(BaseModel):
     agent_id: int
     name: str
-    status: str = "success"  # "success", "fallback", "error"
+    status: str = "success"
     execution_time_ms: float = 0.0
     summary: str = ""
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TrustReport(BaseModel):
+    listing_id: str = ""
     product_name: str
+    brand: str = ""
     category: str
+    price: float = 0.0
+    currency: str = "INR"
     seller_name: str
     seller_id: str
     overall_trust_score: float  # 0 to 100
-    risk_tier: str  # "LOW RISK", "MEDIUM RISK", "HIGH RISK"
+    risk_tier: str  # LOW RISK, MEDIUM RISK, HIGH RISK
     compliance_score: float  # 0.0 to 1.0
     authenticity_score: float  # 0.0 to 1.0
     seller_score: float  # 0.0 to 1.0
     image_integrity_score: float  # 0.0 to 1.0
-    engine_mode: str  # "Live AI LLM" or "Deterministic Heuristic Demo"
-    is_demo_mode: bool = False
-    input_source: str = "Benchmark Dataset"  # "Live URL" or "Benchmark Dataset"
+    engine_mode: str
+    input_source: str = "Live URL"
     executive_summary: str
     recommended_verdict: str
     itemized_evidence: List[EvidenceItem] = Field(default_factory=list)
@@ -102,6 +110,5 @@ class TrustReport(BaseModel):
     image_flags: List[str] = Field(default_factory=list)
     auto_suggested_reviewer_prompt: str = ""
     agent_timeline: List[AgentExecutionStatus] = Field(default_factory=list)
-    drift_analysis: Optional[Dict[str, Any]] = None
     verbose_audit_logs: List[Dict[str, Any]] = Field(default_factory=list)
     guardrail_status: Optional[Dict[str, Any]] = None

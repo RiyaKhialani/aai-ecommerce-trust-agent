@@ -1,16 +1,18 @@
 """
 Agent 6: Seller Behavior Pattern Agent
-Compares current seller activity against known fraud/counterfeit behavior patterns.
-Checks account age vs review velocity ratio, listing churn, authorized distribution, and pricing anomalies.
-Computes Seller Reliability Score (0.0 to 1.0).
+Evaluates seller reliability based on verifiable listing metadata:
+account age vs. review velocity, price-drop dumping relative to MRP, and brand-seller alignment.
 """
 
-from typing import Dict, Any, List, Tuple
+from __future__ import annotations
+
+from typing import Any, Dict, List, Tuple
+
 from agents.schemas import ProductListing
 
 
 class SellerBehaviorAgent:
-    def __init__(self):
+    def __init__(self) -> None:
         self.agent_id = 6
         self.name = "Seller Behavior Pattern Agent"
 
@@ -18,57 +20,52 @@ class SellerBehaviorAgent:
         flags: List[str] = []
         score = 1.0
         review_count = len(listing.reviews)
-        account_age_days = listing.seller_account_age_days
+        age = listing.seller_account_age_days
+        discount_pct = 0.0
 
-        # 1. New-Account Review Inflation Ratio
-        reviews_per_day = review_count / max(1, account_age_days)
-        if account_age_days < 30 and review_count > 100:
-            flags.append(
-                f"New-Account Review Inflation: Seller created {account_age_days} days ago, "
-                f"already accumulated {review_count} reviews ({round(reviews_per_day, 1)} reviews/day)."
-            )
-            score -= 0.40
-        elif account_age_days < 60 and review_count > 200:
-            flags.append(
-                f"Elevated Review Velocity: {review_count} reviews in {account_age_days} days."
-            )
-            score -= 0.20
-
-        # 2. Sudden Price Crash / Dumping Behavior (or massive discount vs MRP)
-        if len(listing.price_history) >= 2:
-            initial_price = listing.price_history[0]["price"]
-            latest_price = listing.price_history[-1]["price"]
-            if initial_price > 0 and latest_price <= (initial_price * 0.4):
-                drop_pct = round(((initial_price - latest_price) / initial_price) * 100)
+        # 1. Account Age vs. Review Velocity (only when account age is actually known)
+        if age is not None and age > 0:
+            reviews_per_day = review_count / age
+            if age < 30 and review_count > 50:
                 flags.append(
-                    f"Drastic Price Crash ({drop_pct}% markdown from ₹{initial_price:,.0f} to ₹{latest_price:,.0f}): "
-                    f"Typical of counterfeit clearance dumping."
+                    f"New-Account Review Inflation: Seller age is {age} days with {review_count} reviews "
+                    f"({reviews_per_day:.1f} reviews/day)."
                 )
-                score -= 0.35
-
-        # 3. Unauthorized Merchant Selling Exclusive Import Brand
-        seller_lower = listing.seller_name.lower()
-        brand_lower = listing.brand.lower()
-        if "rhode" in brand_lower and "official" not in seller_lower:
+                score -= 0.40
+            elif age < 60 and review_count > 150:
+                flags.append(f"Elevated Review Velocity: {review_count} reviews in {age} days.")
+                score -= 0.20
+        else:
             flags.append(
-                f"Unauthorized Distribution Channel: Merchant '{listing.seller_name}' is an unauthorized "
-                f"reseller for exclusive import brand '{listing.brand}'."
+                "Seller Account Age Not Exposed on Public Page: Marketplace did not publish merchant tenure; "
+                "requires internal marketplace API check for full churn profiling."
             )
-            score -= 0.30
+            score -= 0.10
 
-        # 4. Disposable shell merchant indicators
-        if any(term in seller_lower for term in ["global", "direct", "quickmart", "flashmart", "superdeal", "textiles"]):
-            if account_age_days < 45 or "rhode" in brand_lower:
-                flags.append("Entity matches shell reseller profile commonly associated with unauthorized cosmetic imports.")
-                score -= 0.15
+        # 2. Extreme Price Dumping vs. MRP
+        if len(listing.price_history) >= 2:
+            initial_price = float(listing.price_history[0].get("price") or 0)
+            latest_price = float(listing.price_history[-1].get("price") or 0)
+            if initial_price > 0 and latest_price > 0 and latest_price < initial_price:
+                discount_pct = round(((initial_price - latest_price) / initial_price) * 100.0, 1)
+                if discount_pct >= 65.0:
+                    flags.append(
+                        f"Extreme Price Dumping ({discount_pct}% below M.R.P., from {listing.currency} "
+                        f"{initial_price:,.0f} to {latest_price:,.0f}): Common counterfeit clearance indicator."
+                    )
+                    score -= 0.35
 
-        seller_score = max(0.1, min(1.0, round(score, 2)))
+        # 3. Unknown / Unverified Merchant Name
+        seller_lower = listing.seller_name.lower()
+        if seller_lower in ("unknown seller", "third-party merchant", ""):
+            flags.append("Merchant Identity Unverified: Exact seller storefront name was not exposed on the listing.")
+            score -= 0.15
+
+        seller_score = max(0.10, min(1.0, round(score, 2)))
         meta = {
-            "seller_id": listing.seller_id,
             "seller_name": listing.seller_name,
-            "account_age_days": account_age_days,
-            "reviews_per_day": round(reviews_per_day, 1),
-            "seller_score": seller_score
+            "account_age_days": age,
+            "discount_pct": discount_pct,
+            "review_count": review_count,
         }
-
         return seller_score, flags, meta

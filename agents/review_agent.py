@@ -1,48 +1,53 @@
 """
 Agent 2: Review Ingestion & Segmentation Agent
-Collects all reviews for a listing and segments them into time-windowed batches.
-Detects review velocity spikes, unverified purchase surges, and rating distribution shifts.
+Segments extracted reviews into chronological cohorts and detects review velocity bursts
+(>3x baseline cohort volume or high unverified purchase ratios).
 """
 
-from typing import List, Dict, Any, Tuple
+from __future__ import annotations
+
 from collections import defaultdict
-from datetime import datetime
-from agents.schemas import ProductListing, ReviewItem, CohortMetrics
+from typing import Any, Dict, List, Tuple
+
+from agents.schemas import CohortMetrics, ProductListing
 
 
 class ReviewSegmentationAgent:
-    def __init__(self):
+    def __init__(self) -> None:
         self.agent_id = 2
         self.name = "Review Ingestion & Segmentation Agent"
 
     def execute(self, listing: ProductListing) -> Tuple[List[CohortMetrics], Dict[str, Any]]:
         reviews = listing.reviews
         if not reviews:
-            return [], {"spike_detected": False, "total_reviews": 0}
+            return [], {
+                "spike_detected": False,
+                "total_reviews": 0,
+                "unverified_ratio": 0.0,
+                "status": "No customer reviews were present on the scraped page.",
+            }
 
-        # Bucket reviews by timestamp or identifier
         cohort_groups = defaultdict(list)
         for r in reviews:
-            # Determine window key (e.g. Week 1, Week 2, or YYYY-MM)
-            time_str = r.timestamp[:10] if len(r.timestamp) >= 10 else "General"
-            cohort_groups[time_str].append(r)
+            ts = r.timestamp.strip()
+            window_key = ts[:10] if len(ts) >= 10 and ts[0].isdigit() else "Undated"
+            cohort_groups[window_key].append(r)
 
-        # Sort dates
         sorted_keys = sorted(cohort_groups.keys())
         cohorts: List[CohortMetrics] = []
-        counts = []
+        counts: List[int] = []
 
         total_unverified = sum(1 for r in reviews if not r.verified_purchase)
-        overall_unverified_ratio = total_unverified / len(reviews) if reviews else 0.0
+        overall_unverified_ratio = total_unverified / len(reviews)
 
         for key in sorted_keys:
             rev_list = cohort_groups[key]
             cnt = len(rev_list)
             counts.append(cnt)
-            avg_rt = sum(r.rating for r in rev_list) / cnt if cnt > 0 else 0.0
+            avg_rt = sum(r.rating for r in rev_list) / cnt
             unver = sum(1 for r in rev_list if not r.verified_purchase)
-            unver_ratio = unver / cnt if cnt > 0 else 0.0
-            
+            unver_ratio = unver / cnt
+
             cohorts.append(
                 CohortMetrics(
                     time_window=key,
@@ -50,30 +55,31 @@ class ReviewSegmentationAgent:
                     avg_rating=round(avg_rt, 2),
                     unverified_ratio=round(unver_ratio, 2),
                     is_spike=False,
-                    details=f"{cnt} reviews, avg {round(avg_rt, 1)}★, {round(unver_ratio * 100)}% unverified"
+                    details=f"{cnt} reviews | avg {avg_rt:.1f}★ | {unver_ratio * 100:.0f}% unverified",
                 )
             )
 
-        # Spike detection algorithm:
-        # A cohort is considered a spike if count > 50 and count >= 3x the average of other cohorts,
-        # or if a single 48h cohort contains > 100 reviews.
         spike_detected = False
-        spike_info = {}
+        spike_info: Dict[str, Any] = {}
 
-        if len(cohorts) > 0:
-            avg_count = sum(counts) / len(counts)
+        if len(cohorts) >= 2:
+            total_count = sum(counts)
             for c in cohorts:
-                if c.review_count > 50 and (c.review_count >= 3 * avg_count or c.review_count >= 100):
+                other_avg = (total_count - c.review_count) / max(1, len(counts) - 1)
+                if c.review_count >= 5 and c.review_count >= 3.0 * max(other_avg, 0.5):
                     c.is_spike = True
                     spike_detected = True
                     spike_info = {
                         "spike_detected": True,
                         "time_window": c.time_window,
                         "spike_count": c.review_count,
-                        "baseline_average": round(avg_count, 1),
-                        "multiplier": round(c.review_count / (avg_count or 1), 1),
+                        "baseline_average": round(other_avg, 1),
+                        "multiplier": round(c.review_count / max(other_avg, 0.1), 1),
                         "unverified_ratio": c.unverified_ratio,
-                        "warning": f"Abnormal burst: {c.review_count} reviews in a single window vs baseline {round(avg_count, 1)}"
+                        "warning": (
+                            f"Velocity burst detected in {c.time_window}: {c.review_count} reviews "
+                            f"vs {other_avg:.1f} baseline average."
+                        ),
                     }
 
         if not spike_detected:
@@ -81,7 +87,7 @@ class ReviewSegmentationAgent:
                 "spike_detected": False,
                 "total_reviews": len(reviews),
                 "unverified_ratio": round(overall_unverified_ratio, 2),
-                "status": "Review velocity appears organic and steady."
+                "status": "No abnormal single-window review velocity spike detected in extracted sample.",
             }
 
         return cohorts, spike_info
