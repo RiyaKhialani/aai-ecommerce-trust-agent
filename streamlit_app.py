@@ -151,14 +151,111 @@ with st.sidebar:
         )
         input_mode = "live_url"
     else:
+        demo_val = st.session_state.pop("demo_text", "")
         target_input = st.text_area(
             "Paste Real Listing Title, Description, Price & Reviews",
+            value=demo_val,
             height=150,
             placeholder="Paste product title, price, seller name, specs, and customer reviews...",
         )
         input_mode = "pasted_text"
 
     run_audit = st.button("⚡ Run 10-Agent Trust Audit", type="primary", width='stretch')
+
+    st.divider()
+    st.markdown("#### 3. Quick Demo")
+    DEMO_LISTING_TEXT = """Product Title: ACWO DwOTS 09 Bluetooth Calling Smartwatch for Men & Women with 1.52" HD Display
+Brand: ACWO
+Seller: MECURE GLOBAL (Seller ID: SELLER-MECURE-77)
+Seller Rating: 3.6 / 5
+Category: Electronics > Wearable Technology > Smartwatches
+Price: ₹899
+M.R.P.: ₹7,999 (89% off)
+Country of Origin: China
+
+Description:
+ACWO DwOTS 09 smartwatch features a 1.52 inch HD IPS display with Bluetooth calling, 100+ sport modes, SpO2 monitoring, heart rate tracking, sleep monitoring, IP67 water resistance, and 7-day battery life. Compatible with Android and iOS.
+
+Specifications:
+- Display: 1.52" HD IPS, 240x284 resolution
+- Connectivity: Bluetooth 5.2
+- Battery: 230mAh, up to 7 days standby
+- Water Resistance: IP67
+- Sensors: Heart Rate, SpO2, Accelerometer
+- Warranty: 1 Year Manufacturer Warranty
+
+Customer Reviews:
+
+Review 1:
+Reviewer: Amit K.
+Rating: 5.0 stars
+Date: 2026-08-15
+Verified Purchase: Yes
+Title: Best smartwatch ever!!!
+Text: Amazing product best quality best features superb amazing value for money highly recommended to everyone must buy product excellent quality fantastic!!
+
+Review 2:
+Reviewer: Priya S.
+Rating: 5.0 stars
+Date: 2026-08-15
+Verified Purchase: No
+Title: Superb product must buy
+Text: Very good product excellent quality best smartwatch I have ever used amazing features highly recommend to everyone best value for money superb fantastic product!!
+
+Review 3:
+Reviewer: Rahul M.
+Rating: 5.0 stars
+Date: 2026-08-16
+Verified Purchase: No
+Title: Outstanding quality
+Text: Best product amazing quality superb features excellent value for money highly recommended must buy wonderful product fantastic!!
+
+Review 4:
+Reviewer: Sneha D.
+Rating: 3.0 stars
+Date: 2026-07-20
+Verified Purchase: Yes
+Title: Decent but battery drains fast
+Text: The watch looks good and the display is nice for the price. Bluetooth calling works okay but the battery barely lasts 2 days despite the claim of 7 days. Heart rate sensor seems inaccurate compared to my Fitbit. For 899 rupees it's acceptable but don't expect premium quality. The strap quality is cheap plastic.
+
+Review 5:
+Reviewer: Vikram T.
+Rating: 1.0 stars
+Date: 2026-09-01
+Verified Purchase: Yes
+Title: Fake product received - not original ACWO
+Text: Received a counterfeit product. The box had no ACWO branding, the watch UI is completely different from what's shown in listing images. Cheap copy with no warranty card inside. The seller MECURE GLOBAL is selling fake products. Reported to Amazon.
+
+Review 6:
+Reviewer: Happy Customer
+Rating: 5.0 stars
+Date: 2026-08-15
+Verified Purchase: No
+Title: Best product
+Text: Amazing best superb excellent wonderful fantastic highly recommended must buy best value!!
+
+Review 7:
+Reviewer: Deepak R.
+Rating: 4.0 stars
+Date: 2026-06-10
+Verified Purchase: Yes
+Title: Good for the price, some issues
+Text: Display quality is surprisingly good for a sub-1000 watch. The SpO2 readings fluctuate a lot and I wouldn't rely on them for medical purposes. Bluetooth calling range is about 5 meters before it starts cutting out. Sleep tracking is basic but functional. Overall decent value but the 7999 MRP is completely fabricated - this is a 900 rupee watch, not a 8000 rupee one.
+
+Review 8:
+Reviewer: Riya P.
+Rating: 2.0 stars
+Date: 2026-10-05
+Verified Purchase: Yes
+Title: Stopped working after 2 weeks
+Text: Watch worked fine for first 2 weeks then the touchscreen became unresponsive. Tried resetting multiple times but no luck. The 1 year warranty claim is misleading - when I contacted seller they said warranty is only for manufacturing defects and screen issues aren't covered. Very disappointed. The charging cable also broke within a week.
+"""
+    if st.button("🧪 Load Demo Product (with Reviews)", width='stretch'):
+        st.session_state["demo_text"] = DEMO_LISTING_TEXT
+        st.rerun()
+
+    if st.session_state.get("demo_text") and input_choice == "Paste Listing Text":
+        st.info("Demo listing loaded! Click 'Run 10-Agent Trust Audit' above.")
 
     st.divider()
     st.caption("Team: Riya Khialani (34), Prachi Lund (39), Ankita Kukreja (36), Shivam Makhija (41)")
@@ -331,6 +428,7 @@ with tab_cohorts:
     st.markdown("#### Temporal Review Velocity & Forensic Opinion-Spam Audit")
     if report is None:
         st.caption("Run an audit to inspect chronological review cohorts and detect top fake reviews.")
+        st.warning("💡 **To see the Fake Review Detection & Ranking feature:** Use 'Paste Listing Text' mode in the sidebar and include customer reviews in your input, or click '🧪 Load Demo Product' to try a sample product with 8 reviews.")
     else:
         # =========================================================================
         # 1. TOP 5 MOST FAKE / SUSPICIOUS REVIEWS (RANKED & EXPLAINED)
